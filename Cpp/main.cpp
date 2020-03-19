@@ -26,6 +26,14 @@ void Init_Pre_Defined_Tokens()
     Pre_Defined_Tokens.push_back("new");
 }
 
+int argumentIterator;
+char dox86;
+int targetWin32;
+int targetUnix;
+
+char OFBUF[128];
+char WDBUF[128];
+
 //main ~/test.g ~/test.asm -win32 -x86 -F -32
 int main(int argc, char* argv[])
 {
@@ -34,28 +42,53 @@ int main(int argc, char* argv[])
 		return -1;
 	}
     S = new Selector(argv[4]);
-	string OUTPUT = "";
-    if (strcmp(argv[3], "-win32") == 0)
-    {
-        OUTPUT = "";// "global main\n";
-    }
-    else if ((strcmp(argv[3], "-unix") == 0) && (strcmp(argv[4], "x86") == 0))
-    {
-        OUTPUT = "global _start\n_start:\ncall main\nmov eax, 1\n mov ebx, 0\nint 80h\n\n";
-    }
-    if (strcmp(argv[5], "-F") == 0)
-    {
-        _SYSTEM_BIT_TYPE = -atoi(argv[6]) / 8;
+	string OUTPUT = ""; dox86 = 0;
+	targetWin32 = 0;
+	targetUnix = 0;
+    for(argumentIterator = 1; argumentIterator < argc; argumentIterator++) {
+		if(strcmp(argv[argumentIterator],"-win32") == 0) {
+			OUTPUT = "";
+			targetWin32 = 1;
+		} else if(strcmp(argv[argumentIterator],"-unix") == 0 && dox86 == 1) {
+			OUTPUT = "global _start\n_start:\ncall main\nmov eax, 1\n mov ebx, 0\nint 80h\n\n";
+			targetUnix = 1;
+		} else if(strcmp(argv[argumentIterator],"x86") == 0) {
+			dox86 = 1;
+		} else if(strcmp(argv[argumentIterator],"-F") == 0) {
+			argumentIterator++;
+			if(argv[argumentIterator != NULL]) {
+				_SYSTEM_BIT_TYPE = -atoi(argv[argumentIterator])/8;
+			} else {
+				fprintf(stderr,"ERROR WHEN NO ARGS TO -F ARE SPECIFIED");
+				return -1; //i assume this is like an exit
+			}
+		} else if(strcmp(argv[argumentIterator],"--working-dir") == 0) {
+			argumentIterator++;
+			if(argv[argumentIterator != NULL]) { //argv[1] idk what is this argv, just gave it a nice name
+				strcpy(&OFBUF,argv[argumentIterator]);
+			} else {
+				fprintf(stderr,"ERROR WHEN NO ARGS TO --working-dir ARE SPECIFIED");
+				return -1; //i assume this is like an exit
+			}
+		}  else if(strcmp(argv[argumentIterator],"--output") == 0) {
+			argumentIterator++;
+			if(argv[argumentIterator != NULL]) { // argv[2] SEE OFFSTREAM!
+				strcpy(&WDBUF,argv[argumentIterator]);
+			} else {
+				fprintf(stderr,"ERROR WHEN NO ARGS TO --output ARE SPECIFIED");
+				return -1; //i assume this is like an exit
+			}
+		}
     }
 
     Lexer l;
-	l.OpenFile(argv[1]);
-    string start_file = argv[1];
+	l.OpenFile(WDBUF);
+    string start_file = WDBUF;
     Included_Files.push_back(start_file);
 
     Parser p;
     p.Input = l.output;
-	p.Working_Dir = argv[1];
+	p.Working_Dir = WDBUF;
     Init_Pre_Defined_Tokens();
     p.Factory();
 
@@ -73,27 +106,26 @@ int main(int argc, char* argv[])
     e.Input = g.Output;
     e.Factory();
 
-	ofstream o(argv[2]);
+	ofstream o(OFBUF);
     o << OUTPUT;//b.Output;
     o.close();
 
-    if (strcmp(argv[3], "-win32") == 0)
+    if(targetWin32)
     {
+		//target windows
         stringstream output;
-        output << "..\\Cpp\\Assemblers\\yasm_win.exe -g dwarf2 -f win32 -o " << argv[1] << ".obj " << argv[2];
+        output << "..\\Cpp\\Assemblers\\yasm_win.exe -g dwarf2 -f win32 -o " << WDBUF << ".obj " << OFBUF;
 
         std::system(output.str().c_str());
         output = stringstream();
 
-        output << "..\\Cpp\\Linkers\\GoLink.exe " << "/console " << "/debug coff " << "/entry main " << argv[1] << ".obj " << "kernel32.dll ";
+        output << "..\\Cpp\\Linkers\\GoLink.exe " << "/console " << "/debug coff " << "/entry main " << WDBUF << ".obj " << "kernel32.dll ";
 
         std::system(output.str().c_str());
     }
-    else if (strcmp(argv[3], "-unix") == 0)
+    else if(targetUnix)
     {
-
+		//target unix
     }
     return 0;
 }
-
-
